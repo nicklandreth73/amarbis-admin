@@ -46,10 +46,14 @@ export function UserTable({ searchQuery, filters }: UserTableProps) {
     keepPreviousData: true,
   })
 
-  const handleQuickAction = async (action: string, userId: string) => {
+  const handleQuickAction = async (action: string, userId: string, data?: any) => {
     try {
       const response = await fetch(`/api/users/${userId}/${action}`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data || {})
       })
       
       if (!response.ok) throw new Error(`Failed to ${action} user`)
@@ -106,8 +110,8 @@ export function UserTable({ searchQuery, filters }: UserTableProps) {
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {data?.users?.map((user: any) => (
                 <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
+                  <td className="px-6 py-4">
+                    <div className="flex items-start">
                       <div className="h-10 w-10 flex-shrink-0">
                         {user.profile?.photos?.[0]?.url ? (
                           <img
@@ -123,30 +127,56 @@ export function UserTable({ searchQuery, filters }: UserTableProps) {
                           </div>
                         )}
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      <div className="ml-4 max-w-xs">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
                           {user.name || 'No name'}
+                          {user.verification?.adminVerified && (
+                            <div className="group relative">
+                              <Shield className="w-4 h-4 text-blue-600" />
+                              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs text-white bg-gray-900 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                                Admin Verified
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400">
                           {user.email}
+                          {user.profile?.photos && user.profile.photos.length > 0 && (
+                            <span className="ml-2 text-xs text-gray-400">
+                              • {user.profile.photos.length} photo{user.profile.photos.length > 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
+                        {user.profile?.bio && (
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                            {user.profile.bio}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {user.banned ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        Banned
-                      </span>
-                    ) : user.isOnline ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Online
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        Offline
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {user.banned ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Banned
+                        </span>
+                      ) : user.isOnline ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Online
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          Offline
+                        </span>
+                      )}
+                      {user.verification?.adminVerified && (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <Shield className="w-3 h-3 mr-1" />
+                          Verified
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
@@ -230,8 +260,8 @@ export function UserTable({ searchQuery, filters }: UserTableProps) {
         <UserActionsModal
           user={actionModalUser}
           onClose={() => setActionModalUser(null)}
-          onAction={(action) => {
-            handleQuickAction(action, actionModalUser.id)
+          onAction={(action, data) => {
+            handleQuickAction(action, actionModalUser.id, data)
             setActionModalUser(null)
           }}
         />

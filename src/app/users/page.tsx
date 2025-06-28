@@ -12,6 +12,7 @@ export default function UsersPage() {
     verified: 'all',
     status: 'all',
     subscription: 'all',
+    hasPhotos: 'with-photos', // Default to users with photos
     sortBy: 'createdAt',
     sortOrder: 'desc' as 'asc' | 'desc'
   })

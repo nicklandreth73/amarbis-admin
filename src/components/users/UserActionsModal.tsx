@@ -7,15 +7,22 @@ import toast from 'react-hot-toast'
 interface UserActionsModalProps {
   user: any
   onClose: () => void
-  onAction: (action: string) => void
+  onAction: (action: string, data?: any) => void
 }
 
 export function UserActionsModal({ user, onClose, onAction }: UserActionsModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showVerifyForm, setShowVerifyForm] = useState(false)
+  const [verificationNote, setVerificationNote] = useState('')
 
-  const handleAction = async (actionId: string) => {
+  const handleAction = async (actionId: string, data?: any) => {
     if (actionId === 'delete' && !confirmDelete) {
       setConfirmDelete(true)
+      return
+    }
+
+    if (actionId === 'verify' && !showVerifyForm) {
+      setShowVerifyForm(true)
       return
     }
 
@@ -23,7 +30,7 @@ export function UserActionsModal({ user, onClose, onAction }: UserActionsModalPr
     const loadingToast = toast.loading(`Processing ${actionId}...`)
     
     try {
-      await onAction(actionId)
+      await onAction(actionId, data)
       toast.dismiss(loadingToast)
       
       // Success messages
@@ -47,12 +54,13 @@ export function UserActionsModal({ user, onClose, onAction }: UserActionsModalPr
   const actions = [
     {
       id: 'verify',
-      label: user.verification?.adminVerified ? 'Remove Admin Verification' : 'Admin Verify User',
+      label: user.verification?.adminVerified ? 'Already Verified' : 'Admin Verify User',
       icon: Shield,
-      color: user.verification?.adminVerified ? 'text-orange-600' : 'text-blue-600',
+      color: user.verification?.adminVerified ? 'text-gray-400' : 'text-blue-600',
       description: user.verification?.adminVerified 
-        ? 'Remove the admin verified badge from this user'
-        : 'Manually verify this user and show verified badge'
+        ? 'This user has been verified by an admin'
+        : 'Manually verify this user and show verified badge',
+      disabled: user.verification?.adminVerified
     },
     {
       id: user.banned ? 'unban' : 'ban',
@@ -111,12 +119,17 @@ export function UserActionsModal({ user, onClose, onAction }: UserActionsModalPr
         </div>
 
         <div className="space-y-2">
-          {!confirmDelete ? (
+          {!confirmDelete && !showVerifyForm ? (
             actions.map((action) => (
               <button
                 key={action.id}
-                onClick={() => handleAction(action.id)}
-                className="w-full flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors"
+                onClick={() => !action.disabled && handleAction(action.id)}
+                disabled={action.disabled}
+                className={`w-full flex items-start space-x-3 p-3 rounded-lg text-left transition-colors ${
+                  action.disabled 
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer'
+                }`}
               >
                 <action.icon className={`w-5 h-5 mt-0.5 ${action.color}`} />
                 <div className="flex-1">
@@ -129,7 +142,7 @@ export function UserActionsModal({ user, onClose, onAction }: UserActionsModalPr
                 </div>
               </button>
             ))
-          ) : (
+          ) : confirmDelete ? (
             <div className="space-y-4">
               <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
                 <p className="text-sm font-medium text-red-900 dark:text-red-100 mb-2">
@@ -154,7 +167,49 @@ export function UserActionsModal({ user, onClose, onAction }: UserActionsModalPr
                 </button>
               </div>
             </div>
-          )}
+          ) : showVerifyForm ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                  {user.verification?.adminVerified ? 'Remove Admin Verification' : 'Add Admin Verification'}
+                </p>
+                <p className="text-xs text-blue-700 dark:text-blue-200">
+                  {user.verification?.adminVerified 
+                    ? 'This will remove the verified badge from the user profile.'
+                    : 'This will add a verified badge to the user profile.'}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Verification Note (Optional)
+                </label>
+                <textarea
+                  value={verificationNote}
+                  onChange={(e) => setVerificationNote(e.target.value)}
+                  placeholder="Add any notes about this verification..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  rows={3}
+                />
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => handleAction('verify', { note: verificationNote })}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                >
+                  {user.verification?.adminVerified ? 'Remove Verification' : 'Verify User'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowVerifyForm(false)
+                    setVerificationNote('')
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

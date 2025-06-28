@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const verified = searchParams.get('verified') || 'all'
     const status = searchParams.get('status') || 'all'
     const subscription = searchParams.get('subscription') || 'all'
+    const hasPhotos = searchParams.get('hasPhotos') || 'all'
     const sortBy = searchParams.get('sortBy') || 'createdAt'
     const sortOrder = searchParams.get('sortOrder') as 'asc' | 'desc' || 'desc'
 
@@ -53,8 +54,7 @@ export async function GET(request: NextRequest) {
           profile: {
             include: {
               photos: {
-                where: { isPrimary: true },
-                take: 1
+                orderBy: { order: 'asc' }
               }
             }
           },
@@ -79,6 +79,17 @@ export async function GET(request: NextRequest) {
     if (subscription !== 'all') {
       filteredUsers = filteredUsers.filter(u => 
         u.subscription?.tier?.toLowerCase() === subscription.toLowerCase()
+      )
+    }
+    
+    // Filter by photos
+    if (hasPhotos === 'with-photos') {
+      filteredUsers = filteredUsers.filter(u => 
+        u.profile?.photos && u.profile.photos.length > 0
+      )
+    } else if (hasPhotos === 'no-photos') {
+      filteredUsers = filteredUsers.filter(u => 
+        !u.profile?.photos || u.profile.photos.length === 0
       )
     }
 

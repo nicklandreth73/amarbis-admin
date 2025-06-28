@@ -16,8 +16,16 @@ export async function POST(
     }
 
     const userId = params.id
-    const body = await request.json()
-    const { note } = body
+    let note = 'Verified by admin'
+    
+    try {
+      const body = await request.json()
+      if (body.note) {
+        note = body.note
+      }
+    } catch {
+      // If body is empty or invalid JSON, use default note
+    }
 
     // Get user details
     const user = await prisma.user.findUnique({

@@ -7,6 +7,7 @@ interface UserFiltersProps {
     verified: string
     status: string
     subscription: string
+    hasPhotos: string
     sortBy: string
     sortOrder: 'asc' | 'desc'
   }
@@ -23,6 +24,21 @@ export function UserFilters({ filters, onChange }: UserFiltersProps) {
       <div className="flex items-center space-x-2 text-gray-900 dark:text-white">
         <Filter className="w-5 h-5" />
         <h3 className="font-medium">Filters</h3>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Photos
+        </label>
+        <select
+          value={filters.hasPhotos}
+          onChange={(e) => handleFilterChange('hasPhotos', e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        >
+          <option value="with-photos">With Photos Only</option>
+          <option value="all">All Users</option>
+          <option value="no-photos">No Photos</option>
+        </select>
       </div>
 
       <div>
