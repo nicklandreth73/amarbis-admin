@@ -1,0 +1,657 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL_SAFE")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+// NextAuth.js models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Core User Model
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  phone         String?   @unique
+  phoneVerified DateTime?
+  
+  name          String?
+  image         String?
+  password      String?   // For email/password authentication
+  
+  // Profile
+  profile       Profile?
+  
+  // Authentication
+  accounts      Account[]
+  sessions      Session[]
+  
+  // Dating specific
+  preferences   UserPreferences?
+  verification  UserVerification?
+  subscription  UserSubscription?
+  
+  // Location
+  locationId    String?
+  location      Location? @relation("UserLocation", fields: [locationId], references: [id])
+  
+  // Relationships
+  sentSwipes      Swipe[]  @relation("SwipeSender")
+  receivedSwipes  Swipe[]  @relation("SwipeReceiver")
+  sentMatches     Match[]  @relation("MatchSender")
+  receivedMatches Match[]  @relation("MatchReceiver")
+  
+  // Communication
+  conversations   ConversationParticipant[]
+  messages        Message[]
+  initiatedCalls  Call[] @relation("CallInitiator")
+  receivedCalls   Call[] @relation("CallParticipant")
+  
+  // Safety & Moderation
+  reports         Report[] @relation("Reporter")
+  reportedBy      Report[] @relation("Reported")
+  blocks          Block[]  @relation("Blocker")
+  blockedBy       Block[]  @relation("Blocked")
+  
+  // Activity
+  isOnline        Boolean  @default(false)
+  lastSeen        DateTime @default(now())
+  
+  // Admin fields
+  isAdmin        Boolean  @default(false)
+  banned         Boolean  @default(false)
+  bannedAt       DateTime?
+  banReason      String?
+  credits        Int      @default(0)
+  lastIp         String?
+  deviceId       String?
+  
+  // Daily usage tracking
+  dailyLimits    DailyLimit[]
+  weeklyUsage    WeeklyUsage[]
+  purchasedCredits PurchasedCredits?
+  
+  // Admin relations
+  adminLogs      AdminLog[]
+  banAppeals     BanAppeal[]
+  reviewedAppeals BanAppeal[] @relation("BanAppealReviewer")
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("users")
+}
+
+// User Profile Information
+model Profile {
+  id          String @id @default(cuid())
+  userId      String @unique
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Basic Info
+  displayName String
+  bio         String?
+  age         Int
+  birthDate   DateTime
+  gender      String  // Enhanced gender options from config
+  orientation String  // JSON string of array
+  transitionStatus String? // For transgender users (optional)
+  
+  // Location fields for international matching
+  country     String?
+  countryCode String? // ISO country code
+  region      String? // State/Province/Region
+  regionCode  String? // State/Province code
+  latitude    Float?  // For GPS/map-based location
+  longitude   Float?  // For GPS/map-based location
+  showDistance Boolean @default(true) // Show distance to other users
+  locationName String? // Display name for custom locations
+  
+  // Additional Info
+  interests   String? // JSON string of array
+  education   String?
+  occupation  String?
+  company     String?
+  height      Int? // in centimeters
+  smoking     String? // 'NEVER', 'SOCIALLY', 'REGULARLY', 'TRYING_TO_QUIT'
+  drinking    String? // 'NEVER', 'SOCIALLY', 'REGULARLY', 'FREQUENTLY'
+  exercise    String? // 'NEVER', 'RARELY', 'SOMETIMES', 'REGULARLY', 'DAILY'
+  religion    String?
+  politics    String?
+  
+  // Profile Photos
+  photos      Photo[]
+  
+  // Visibility & Settings
+  isVisible   Boolean @default(true)
+  isPaused    Boolean @default(false)
+  showAge     Boolean @default(true)
+  
+  // Profile Completion
+  completionScore      Int     @default(0)
+  completedOnboarding  Boolean @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("profiles")
+}
+
+// Profile Photos
+model Photo {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  url       String
+  order     Int     @default(0)
+  isPrimary Boolean @default(false)
+  
+  // Safety verification
+  isVerified   Boolean @default(false)
+  moderationStatus String @default("PENDING") // 'PENDING', 'APPROVED', 'REJECTED', 'FLAGGED'
+  rejectionReason  String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("photos")
+}
+
+// User Preferences for International Matching
+model UserPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Age preferences
+  minAge Int @default(18)
+  maxAge Int @default(99)
+  
+  // Location preferences for matching
+  preferredCountries  String? // JSON string of array: ['Thailand', 'Japan', 'USA']
+  excludedCountries   String? // JSON string of array: countries to avoid
+  preferredCities     String? // JSON string of array: specific cities to search
+  preferredRegions    String? // JSON string of array: specific regions/states
+  timeZonePreference  String? // 'NO_PREFERENCE', 'SIMILAR_TIMEZONE', 'SPECIFIC_ZONES'
+  maxTimeZoneDiff     Int @default(24) // Max hours difference (24 = no limit)
+  
+  // Gender and orientation preferences
+  interestedIn String? // JSON string of array: gender identities interested in
+  
+  // Relationship type preferences (international specific)
+  relationshipTypes String? // JSON string of array from international-config.ts
+  openToRelocation  Boolean @default(false) // Willing to relocate
+  travelFrequency   String? // 'NEVER', 'RARELY', 'SOMETIMES', 'FREQUENTLY'
+  
+  // Relationship style preferences (new)
+  relationshipStyle String? // User's own relationship style
+  openToDisclosure  Boolean @default(true) // Show relationship style on profile
+  
+  // Language preferences
+  preferredLanguages String? // JSON string of array: ['English', 'Spanish', 'Thai']
+  requireCommonLanguage Boolean @default(false)
+  
+  // Verification level preferences
+  minVerificationLevel String @default("BASIC") // Minimum verification level required
+  requireIdVerification Boolean @default(false) // Require government ID verification
+  
+  // Cultural preferences
+  culturalOpenness     String? // 'VERY_OPEN', 'SOMEWHAT_OPEN', 'PREFER_SIMILAR'
+  religionImportance   String? // 'NOT_IMPORTANT', 'SOMEWHAT_IMPORTANT', 'VERY_IMPORTANT'
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("user_preferences")
+}
+
+// Enhanced User Verification for International Dating
+model UserVerification {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Basic verification
+  emailVerified    Boolean @default(false)
+  phoneVerified    Boolean @default(false)
+  
+  // Photo verification (enhanced for international safety)
+  photoVerified       Boolean @default(false)
+  selfieMatching      Boolean @default(false)
+  deepfakeCheck       Boolean @default(false)
+  verificationPhoto   String?
+  photoVerifiedAt     DateTime?
+  
+  // Government ID verification (premium feature)
+  idVerified          Boolean @default(false)
+  idDocument          String? // Encrypted storage reference
+  idType              String? // 'passport', 'drivers_license', 'national_id'
+  idCountryIssued     String? // Country that issued the ID
+  faceMatchConfidence Float?  // AI confidence score for face matching
+  idVerifiedAt        DateTime?
+  
+  // Video verification (for premium users)
+  videoVerified       Boolean @default(false)
+  videoVerificationUrl String?
+  videoVerifiedAt     DateTime?
+  
+  // Social verification
+  facebookVerified    Boolean @default(false)
+  instagramVerified   Boolean @default(false)
+  linkedinVerified    Boolean @default(false)
+  
+  // International safety scores
+  trustScore          Float @default(0.0)
+  riskScore           Float @default(0.0) // Lower is better
+  verificationLevel   String @default("BASIC") // 'BASIC', 'VERIFIED', 'PREMIUM', 'ENTERPRISE'
+  
+  // Admin verification - manual verification by staff
+  adminVerified       Boolean @default(false)
+  adminVerifiedAt     DateTime?
+  adminVerifiedBy     String? // Admin user ID who verified
+  adminVerificationNote String? // Optional note from admin
+  showVerifiedBadge   Boolean @default(true) // Whether to display the verified badge
+  
+  // Background checks (enterprise level)
+  backgroundCheckStatus String @default("NOT_REQUESTED") // 'NOT_REQUESTED', 'PENDING', 'PASSED', 'FAILED'
+  backgroundCheckDate   DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("user_verifications")
+}
+
+// Subscription Management
+model UserSubscription {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  tier            String // 'FREE', 'PREMIUM', 'GOLD'
+  status          String // 'ACTIVE', 'CANCELLED', 'EXPIRED', 'TRIAL'
+  
+  // Billing
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  
+  // Dates
+  startDate       DateTime
+  endDate         DateTime?
+  trialEndDate    DateTime?
+  
+  // Features
+  unlimitedLikes  Boolean @default(false)
+  superLikes      Int     @default(0)
+  boosts          Int     @default(0)
+  rewinds         Int     @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("user_subscriptions")
+}
+
+// Swipe Actions
+model Swipe {
+  id         String     @id @default(cuid())
+  senderId   String
+  receiverId String
+  
+  sender     User @relation("SwipeSender", fields: [senderId], references: [id])
+  receiver   User @relation("SwipeReceiver", fields: [receiverId], references: [id])
+  
+  action     String // 'PASS', 'LIKE', 'SUPER_LIKE'
+  isSuperLike Boolean @default(false)
+  
+  createdAt  DateTime @default(now())
+  
+  @@unique([senderId, receiverId])
+  @@map("swipes")
+}
+
+// Matches
+model Match {
+  id         String      @id @default(cuid())
+  senderId   String
+  receiverId String
+  
+  sender     User @relation("MatchSender", fields: [senderId], references: [id])
+  receiver   User @relation("MatchReceiver", fields: [receiverId], references: [id])
+  
+  status     String @default("ACTIVE") // 'ACTIVE', 'EXPIRED', 'UNMATCHED', 'BLOCKED'
+  
+  // Match metadata
+  isFromSuperLike Boolean @default(false)
+  
+  // Communication
+  conversation Conversation?
+  
+  // Timestamps
+  matchedAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  expiresAt  DateTime? // For matches that expire
+  
+  @@unique([senderId, receiverId])
+  @@map("matches")
+}
+
+// Conversations
+model Conversation {
+  id      String @id @default(cuid())
+  matchId String @unique
+  match   Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  
+  participants ConversationParticipant[]
+  messages     Message[]
+  
+  // Conversation settings
+  isEncrypted Boolean @default(true)
+  
+  // Last activity
+  lastMessageAt DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("conversations")
+}
+
+// Conversation Participants
+model ConversationParticipant {
+  id             String @id @default(cuid())
+  conversationId String
+  userId         String
+  
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Participant settings
+  hasUnreadMessages Boolean @default(false)
+  lastReadAt        DateTime?
+  isTyping          Boolean @default(false)
+  
+  // Safety settings
+  hasBlockedOtherUser Boolean @default(false)
+  
+  joinedAt DateTime @default(now())
+  
+  @@unique([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+// Messages
+model Message {
+  id             String @id @default(cuid())
+  conversationId String
+  senderId       String
+  
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  
+  // Message content
+  content        String?
+  messageType    String @default("TEXT") // 'TEXT', 'PHOTO', 'VOICE', 'VIDEO', 'GIF', 'STICKER'
+  
+  // Media content
+  mediaUrl       String?
+  mediaType      String?
+  thumbnailUrl   String?
+  
+  // Message status
+  isEdited       Boolean @default(false)
+  isDeleted      Boolean @default(false)
+  
+  // Safety
+  moderationStatus String @default("APPROVED") // 'PENDING', 'APPROVED', 'FLAGGED', 'REJECTED'
+  
+  // Read status
+  isRead         Boolean @default(false)
+  readAt         DateTime?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("messages")
+}
+
+// Safety Reports
+model Report {
+  id         String @id @default(cuid())
+  reporterId String
+  reportedId String
+  
+  reporter   User @relation("Reporter", fields: [reporterId], references: [id])
+  reported   User @relation("Reported", fields: [reportedId], references: [id])
+  
+  reason     String // 'INAPPROPRIATE_PHOTOS', 'HARASSMENT', 'SPAM', 'FAKE_PROFILE', 'UNDERAGE', 'HATE_SPEECH', 'VIOLENCE_THREATS', 'SCAM', 'OTHER'
+  description String?
+  
+  // Evidence (JSON string of URLs)
+  evidenceUrls String?
+  
+  // Report status
+  status     String @default("PENDING") // 'PENDING', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED'
+  reviewedBy String?
+  reviewedAt DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("reports")
+}
+
+// User Blocks
+model Block {
+  id        String @id @default(cuid())
+  blockerId String
+  blockedId String
+  
+  blocker   User @relation("Blocker", fields: [blockerId], references: [id])
+  blocked   User @relation("Blocked", fields: [blockedId], references: [id])
+  
+  reason    String?
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([blockerId, blockedId])
+  @@map("blocks")
+}
+
+// Video/Audio Calls
+model Call {
+  id            String @id @default(cuid())
+  callerId      String
+  participantId String
+  
+  caller        User @relation("CallInitiator", fields: [callerId], references: [id])
+  participant   User @relation("CallParticipant", fields: [participantId], references: [id])
+  
+  // Call details
+  callType      String // 'voice', 'video'
+  status        String // 'INITIATED', 'ACCEPTED', 'REJECTED', 'ENDED', 'FAILED'
+  
+  // Call timing
+  startedAt     DateTime @default(now())
+  acceptedAt    DateTime?
+  endedAt       DateTime?
+  duration      Int? // Duration in seconds
+  
+  // Quality metrics
+  connectionQuality String? // 'EXCELLENT', 'GOOD', 'FAIR', 'POOR'
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("calls")
+}
+
+// Location model - simplified for country/region data only
+model Location {
+  id          String @id @default(cuid())
+  countryCode String
+  countryName String
+  regionCode  String?
+  regionName  String?
+  latitude    Float?
+  longitude   Float?
+  createdAt   DateTime @default(now())
+  
+  // Users at this location
+  users       User[] @relation("UserLocation")
+  
+  @@unique([countryCode, regionCode])
+  @@index([countryCode])
+  @@map("locations")
+}
+
+// Blocked items for admin management
+model BlockedItem {
+  id        String   @id @default(cuid())
+  type      String   // 'ip', 'device', 'email'
+  value     String
+  reason    String
+  blockedBy String   // Admin user ID
+  createdAt DateTime @default(now())
+  
+  @@unique([type, value])
+  @@index([type])
+  @@index([value])
+  @@map("blocked_items")
+}
+
+// Daily usage limits tracking for subscription features
+model DailyLimit {
+  id              String   @id @default(cuid())
+  userId          String
+  date            DateTime
+  swipesUsed      Int      @default(0)
+  superLikesUsed  Int      @default(0)
+  complimentsUsed Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("daily_limits")
+}
+
+// Weekly usage limits tracking for subscription features
+model WeeklyUsage {
+  id                   String   @id @default(cuid())
+  userId               String
+  weekStart            DateTime // Monday of the week
+  superLikesUsed       Int      @default(0)
+  complimentsUsed      Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, weekStart])
+  @@index([userId])
+  @@index([weekStart])
+  @@map("weekly_usage")
+}
+// Purchased credits for add-ons
+model PurchasedCredits {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  superLikes       Int      @default(0)
+  compliments      Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("purchased_credits")
+}
+
+// Admin activity logs
+model AdminLog {
+  id          String   @id @default(cuid())
+  adminId     String
+  action      String   // 'ban_user', 'verify_photo', 'reset_password', 'verify_account', etc.
+  targetType  String   // 'user', 'photo', 'report', 'blocked_item'
+  targetId    String?  // User ID or resource ID
+  details     Json?    // Additional action details
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  
+  admin User @relation(fields: [adminId], references: [id])
+  
+  @@index([adminId])
+  @@index([targetId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("admin_logs")
+}
+
+// Ban appeals
+model BanAppeal {
+  id          String   @id @default(cuid())
+  userId      String
+  reason      String
+  status      String   @default("pending") // 'pending', 'approved', 'rejected'
+  reviewedBy  String?
+  reviewNote  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id])
+  reviewer    User?    @relation("BanAppealReviewer", fields: [reviewedBy], references: [id])
+  
+  @@index([userId])
+  @@index([status])
+  @@map("ban_appeals")
+}
